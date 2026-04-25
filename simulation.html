@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Step Simulation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🎬 Step-by-Step Simulation</div>
+  <div class="page-subtitle">Visual binary subnetting walkthrough — learn how subnets are derived bit by bit</div>
+</div>
+
+<!-- Input Card -->
+<div class="glass-card">
+  <div class="section-title">⚙️ Simulation Input</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+    <div class="form-group" style="flex:2;min-width:200px;margin-bottom:0;">
+      <label class="form-label">IP Address</label>
+      <input type="text" class="form-input" id="simIP" value="192.168.10.0" placeholder="e.g. 192.168.10.0"/>
+    </div>
+    <div class="form-group" style="flex:1;min-width:100px;margin-bottom:0;">
+      <label class="form-label">CIDR</label>
+      <input type="number" class="form-input" id="simCIDR" min="1" max="32" value="24" placeholder="24"/>
+    </div>
+    <button class="btn btn-primary" id="simBtn" onclick="startSimulation()" style="margin-bottom:0;flex-shrink:0;">
+      🎬 Start Simulation
+    </button>
+  </div>
+  <div id="simAlert" class="hidden mt-16"></div>
+</div>
+
+<!-- Simulation Area -->
+<div id="simArea" class="hidden mt-24">
+
+  <!-- Step Progress -->
+  <div class="glass-card">
+    <div class="section-title">🗺️ Progress</div>
+    <div class="step-indicator" id="stepIndicator"></div>
+
+    <!-- Step Content -->
+    <div id="stepContent">
+      <!-- Steps are dynamically injected -->
+    </div>
+
+    <!-- Navigation -->
+    <div style="display:flex;gap:12px;justify-content:space-between;margin-top:28px;flex-wrap:wrap;">
+      <button class="btn btn-ghost" id="prevBtn" onclick="changeStep(-1)">← Previous</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="stepCounter" style="font-size:13px;color:var(--text-secondary);"></span>
+      </div>
+      <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">Next →</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Summary (after last step) -->
+<div id="simSummary" class="hidden mt-24">
+  <div class="glass-card" style="background:linear-gradient(135deg,rgba(102,126,234,0.15),rgba(118,75,162,0.15));border:1px solid rgba(102,126,234,0.3);">
+    <div style="text-align:center;padding:16px 0;">
+      <div style="font-size:36px;margin-bottom:12px;">🎉</div>
+      <div style="font-size:22px;font-weight:700;margin-bottom:8px;background:var(--grad-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Simulation Complete!</div>
+      <div style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;">You've walked through all the binary subnetting steps.</div>
+      <div class="info-grid" id="simFinalGrid" style="text-align:left;"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let allSteps    = [];
+let currentStep = 0;
+
+async function startSimulation() {
+  const ip   = document.getElementById('simIP').value.trim();
+  const cidr = document.getElementById('simCIDR').value.trim();
+  clearAlert('simAlert');
+  setLoading('simBtn', true);
+
+  try {
+    const res = await apiPost('/api/simulation', { ip, cidr });
+    if (!res.success) { showAlert('simAlert', res.error); return; }
+
+    allSteps    = res.steps;
+    currentStep = 0;
+
+    buildStepIndicator(res.total_steps);
+    renderStep(0);
+
+    document.getElementById('simArea').classList.remove('hidden');
+    document.getElementById('simSummary').classList.add('hidden');
+    document.getElementById('simArea').scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    showAlert('simAlert', 'Could not connect to server.');
+  } finally {
+    setLoading('simBtn', false);
+  }
+}
+
+function buildStepIndicator(total) {
+  const container = document.getElementById('stepIndicator');
+  container.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'step-dot';
+    dot.textContent = i + 1;
+    dot.onclick = () => { currentStep = i; renderStep(i); };
+    container.appendChild(dot);
+  }
+}
+
+function updateStepIndicator(idx) {
+  document.querySelectorAll('.step-dot').forEach((dot, i) => {
+    dot.classList.remove('active', 'completed');
+    if (i < idx)       dot.classList.add('completed');
+    else if (i === idx) dot.classList.add('active');
+  });
+}
+
+function renderStep(idx) {
+  const step = allSteps[idx];
+  updateStepIndicator(idx);
+
+  let html = `
+    <div class="sim-step active">
+      <div class="step-title">Step ${step.step}: ${step.title}</div>
+      <div class="step-desc">${step.description}</div>`;
+
+  const cidr = step.cidr;
+
+  if (step.step === 1) {
+    // Binary IP conversion
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">IP IN BINARY</div>
+        ${buildBitHTML(step.ip_binary_flat, cidr)}
+      </div>
+      <div class="bit-legend">
+        <div class="legend-item"><div class="legend-dot legend-dot-network"></div> Network Bits (first ${cidr})</div>
+        <div class="legend-item"><div class="legend-dot legend-dot-host"></div> Host Bits (last ${32-cidr})</div>
+      </div>
+      <div class="info-item mt-16">
+        <div class="info-label">Dotted Decimal IP</div>
+        <div class="info-value">${step.ip_binary}</div>
+      </div>`;
+  }
+
+  else if (step.step === 2) {
+    // Subnet Mask in binary
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">SUBNET MASK IN BINARY</div>
+        ${buildBitHTML(step.mask_binary_flat, cidr)}
+      </div>
+      <div class="info-item">
+        <div class="info-label">Subnet Mask (Dotted)</div>
+        <div class="info-value">${step.mask_binary}</div>
+      </div>
+      <div class="info-item mt-16" style="background:rgba(102,126,234,0.1);">
+        <div class="info-label">Rule</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">
+          All network bits = <strong style="color:#667eea;">1</strong>&nbsp;&nbsp;|&nbsp;&nbsp;All host bits = <strong style="color:#c84b9e;">0</strong>
+        </div>
+      </div>`;
+  }
+
+  else if (step.step === 3) {
+    // AND operation
+    html += `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">IP ADDRESS</div>
+        ${buildBitHTML(step.ip_binary_flat, cidr)}
+      </div>
+      <div style="font-size:18px;color:var(--text-secondary);text-align:center;margin:6px 0;">AND (⊗)</div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">SUBNET MASK</div>
+        ${buildBitHTML(step.mask_binary_flat, cidr)}
+      </div>
+      <div style="font-size:18px;color:var(--text-secondary);text-align:center;margin:6px 0;">= RESULT</div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">NETWORK ADDRESS</div>
+        ${buildBitHTML(step.network_binary_flat, cidr)}
+      </div>`;
+  }
+
+  else if (step.step === 4) {
+    // Network address
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">NETWORK ADDRESS (ALL HOST BITS = 0)</div>
+        ${buildBitHTML(step.network_binary_flat, cidr)}
+      </div>
+      <div class="stat-card stat-card-1" style="max-width:280px;">
+        <div class="stat-label">Network Address</div>
+        <div class="stat-value">${step.network_ip}/${cidr}</div>
+      </div>`;
+  }
+
+  else if (step.step === 5) {
+    // Broadcast
+    html += `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">BROADCAST ADDRESS (ALL HOST BITS = 1)</div>
+        ${buildBitHTML(step.broadcast_binary_flat, cidr)}
+      </div>
+      <div class="stat-card stat-card-2" style="max-width:280px;">
+        <div class="stat-label">Broadcast Address</div>
+        <div class="stat-value">${step.broadcast_ip}</div>
+      </div>`;
+  }
+
+  else if (step.step === 6) {
+    // Host range
+    html += `
+      <div class="stat-grid">
+        <div class="stat-card stat-card-3">
+          <div class="stat-label">First Usable Host</div>
+          <div class="stat-value" style="font-size:18px;">${step.first_host}</div>
+          <div class="stat-icon">🚀</div>
+        </div>
+        <div class="stat-card stat-card-4">
+          <div class="stat-label">Last Usable Host</div>
+          <div class="stat-value" style="font-size:18px;">${step.last_host}</div>
+          <div class="stat-icon">🏁</div>
+        </div>
+        <div class="stat-card stat-card-1">
+          <div class="stat-label">Total IPs</div>
+          <div class="stat-value">${fmt(step.total_hosts)}</div>
+          <div class="stat-icon">🔢</div>
+        </div>
+        <div class="stat-card stat-card-5">
+          <div class="stat-label">Usable Hosts</div>
+          <div class="stat-value">${fmt(step.usable_hosts)}</div>
+          <div class="stat-icon">💻</div>
+        </div>
+      </div>`;
+
+    // Show summary after last step loads
+    setTimeout(() => {
+      if (idx === allSteps.length - 1) {
+        renderSummary(step);
+      }
+    }, 200);
+  }
+
+  html += '</div>';
+  document.getElementById('stepContent').innerHTML = html;
+  document.getElementById('stepCounter').textContent = `Step ${idx+1} of ${allSteps.length}`;
+  document.getElementById('prevBtn').disabled = idx === 0;
+  document.getElementById('nextBtn').disabled = idx === allSteps.length - 1;
+  document.getElementById('nextBtn').textContent = idx === allSteps.length - 2 ? 'Finish ✓' : 'Next →';
+}
+
+function buildBitHTML(flatBin, cidr) {
+  let html = '<div class="binary-display">';
+  flatBin.split('').forEach((bit, i) => {
+    if (i > 0 && i % 8 === 0) html += '<span class="bit-separator">.</span>';
+    const cls = i < cidr ? 'bit-network' : 'bit-host';
+    html += `<span class="bit ${cls}">${bit}</span>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function changeStep(dir) {
+  const next = currentStep + dir;
+  if (next < 0 || next >= allSteps.length) return;
+  currentStep = next;
+  renderStep(currentStep);
+}
+
+function renderSummary(lastStep) {
+  const summaryEl = document.getElementById('simSummary');
+  document.getElementById('simFinalGrid').innerHTML = `
+    <div class="info-item"><div class="info-label">First Host</div><div class="info-value highlight">${lastStep.first_host}</div></div>
+    <div class="info-item"><div class="info-label">Last Host</div><div class="info-value">${lastStep.last_host}</div></div>
+    <div class="info-item"><div class="info-label">Total IPs</div><div class="info-value">${fmt(lastStep.total_hosts)}</div></div>
+    <div class="info-item"><div class="info-label">Usable Hosts</div><div class="info-value highlight">${fmt(lastStep.usable_hosts)}</div></div>`;
+  summaryEl.classList.remove('hidden');
+  summaryEl.scrollIntoView({ behavior:'smooth' });
+}
+
+// Auto-start if URL params provided
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('ip') && params.get('cidr')) {
+    document.getElementById('simIP').value   = params.get('ip');
+    document.getElementById('simCIDR').value = params.get('cidr');
+    startSimulation();
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Network Tools{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🔧 Network Tools</div>
+  <div class="page-subtitle">CIDR converter, IP validator, class identifier, and smart planner</div>
+</div>
+
+<div class="grid-2">
+  <!-- CIDR ↔ Mask Converter -->
+  <div class="glass-card">
+    <div class="section-title">🔄 CIDR ↔ Subnet Mask Converter</div>
+    <div class="tabs">
+      <div class="tab active" id="tab-c2m" onclick="switchConverter('c2m')">CIDR → Mask</div>
+      <div class="tab" id="tab-m2c" onclick="switchConverter('m2c')">Mask → CIDR</div>
+    </div>
+
+    <div id="c2m-group">
+      <div class="form-group">
+        <label class="form-label">CIDR Prefix Length (e.g. 24)</label>
+        <div style="display:flex;gap:10px;">
+          <input type="number" class="form-input" id="c2mInput" min="0" max="32" value="24" placeholder="24"/>
+          <button class="btn btn-primary" onclick="convertC2M()">Convert</button>
+        </div>
+      </div>
+      <div id="c2mResult" class="info-item hidden">
+        <div class="info-label">Subnet Mask</div>
+        <div class="info-value highlight" id="c2mOutput"></div>
+      </div>
+    </div>
+
+    <div id="m2c-group" class="hidden">
+      <div class="form-group">
+        <label class="form-label">Subnet Mask (e.g. 255.255.255.0)</label>
+        <div style="display:flex;gap:10px;">
+          <input type="text" class="form-input" id="m2cInput" value="255.255.255.0" placeholder="255.255.255.0"/>
+          <button class="btn btn-primary" onclick="convertM2C()">Convert</button>
+        </div>
+      </div>
+      <div id="m2cResult" class="info-item hidden">
+        <div class="info-label">CIDR Prefix</div>
+        <div class="info-value highlight" id="m2cOutput"></div>
+      </div>
+    </div>
+
+    <!-- Quick Reference Table -->
+    <div style="margin-top:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;letter-spacing:1px;">COMMON CIDRS</div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>CIDR</th><th>Subnet Mask</th><th>Hosts</th></tr></thead>
+          <tbody>
+            <tr><td>/8</td><td>255.0.0.0</td><td>16,777,214</td></tr>
+            <tr><td>/16</td><td>255.255.0.0</td><td>65,534</td></tr>
+            <tr><td>/24</td><td>255.255.255.0</td><td>254</td></tr>
+            <tr><td>/25</td><td>255.255.255.128</td><td>126</td></tr>
+            <tr><td>/26</td><td>255.255.255.192</td><td>62</td></tr>
+            <tr><td>/27</td><td>255.255.255.224</td><td>30</td></tr>
+            <tr><td>/28</td><td>255.255.255.240</td><td>14</td></tr>
+            <tr><td>/29</td><td>255.255.255.248</td><td>6</td></tr>
+            <tr><td>/30</td><td>255.255.255.252</td><td>2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- IP Validator & Info -->
+  <div class="glass-card">
+    <div class="section-title">🔍 IP Validator & Identifier</div>
+    <div class="form-group">
+      <label class="form-label">IP Address</label>
+      <div style="display:flex;gap:10px;">
+        <input type="text" class="form-input" id="validateInput" placeholder="e.g. 10.0.0.1" value="10.0.0.1"/>
+        <button class="btn btn-accent" onclick="validateIP()">Validate</button>
+      </div>
+    </div>
+
+    <div id="validateResult" class="hidden">
+      <div id="validBadge" style="margin-bottom:16px;font-size:16px;font-weight:700;"></div>
+      <div class="info-grid" id="ipInfoGrid"></div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">BINARY REPRESENTATION</div>
+        <div id="ipBin" class="binary-display" style="font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:2px;color:#667eea;word-break:break-all;padding:10px;background:var(--glass-bg);border-radius:8px;border:1px solid var(--glass-border);"></div>
+      </div>
+    </div>
+
+    <div id="validateAlert" class="hidden mt-16"></div>
+
+    <!-- IP Class Reference -->
+    <div style="margin-top:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;letter-spacing:1px;">IP CLASS REFERENCE</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(102,126,234,0.1);border-radius:8px;border-left:3px solid #667eea;">
+          <span><strong>Class A</strong> — 1.0.0.0 to 126.255.255.255</span><span>Hosts: 16M+</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(240,147,251,0.1);border-radius:8px;border-left:3px solid #f093fb;">
+          <span><strong>Class B</strong> — 128.0.0.0 to 191.255.255.255</span><span>Hosts: 65K+</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(79,172,254,0.1);border-radius:8px;border-left:3px solid #4facfe;">
+          <span><strong>Class C</strong> — 192.0.0.0 to 223.255.255.255</span><span>Hosts: 254</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 12px;background:rgba(67,233,123,0.1);border-radius:8px;border-left:3px solid #43e97b;">
+          <span><strong>Class D</strong> — 224.0.0.0 to 239.255.255.255</span><span>Multicast</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Smart Network Planner -->
+<div class="glass-card mt-24">
+  <div class="section-title">🧠 Smart Network Planner</div>
+  <div class="grid-3">
+    <div class="form-group">
+      <label class="form-label">Base Network</label>
+      <input type="text" class="form-input" id="plannerNet" value="10.0.0.0/8" placeholder="10.0.0.0/8"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Total Hosts Needed</label>
+      <input type="number" class="form-input" id="plannerHosts" value="200" placeholder="200"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Number of Subnets</label>
+      <input type="number" class="form-input" id="plannerSubnets" value="4" placeholder="4"/>
+    </div>
+  </div>
+  <button class="btn btn-primary" id="plannerBtn" onclick="runPlanner()">🧠 Get Recommendations</button>
+
+  <div id="plannerResult" class="hidden mt-24">
+    <div class="section-title">💡 Recommendations</div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>CIDR</th>
+            <th>Subnet Mask</th>
+            <th>Hosts/Subnet</th>
+            <th>Efficiency</th>
+            <th>Wasted/Subnet</th>
+            <th>Recommendation</th>
+          </tr>
+        </thead>
+        <tbody id="plannerTable"></tbody>
+      </table>
+    </div>
+
+    <div class="glass-card mt-16" id="plannerRecommendation" style="background:rgba(102,126,234,0.1);border:1px solid rgba(102,126,234,0.3);"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let converterMode = 'c2m';
+
+function switchConverter(mode) {
+  converterMode = mode;
+  document.getElementById('tab-c2m').classList.toggle('active', mode === 'c2m');
+  document.getElementById('tab-m2c').classList.toggle('active', mode === 'm2c');
+  document.getElementById('c2m-group').classList.toggle('hidden', mode !== 'c2m');
+  document.getElementById('m2c-group').classList.toggle('hidden', mode !== 'm2c');
+}
+
+async function convertC2M() {
+  const cidr = document.getElementById('c2mInput').value;
+  const res  = await apiPost('/api/tools/cidr_to_mask', { cidr });
+  if (res.success) {
+    document.getElementById('c2mOutput').textContent = res.mask;
+    document.getElementById('c2mResult').classList.remove('hidden');
+  }
+}
+
+async function convertM2C() {
+  const mask = document.getElementById('m2cInput').value.trim();
+  const res  = await apiPost('/api/tools/mask_to_cidr', { mask });
+  if (res.success) {
+    document.getElementById('m2cOutput').textContent = `/${res.cidr}`;
+    document.getElementById('m2cResult').classList.remove('hidden');
+  }
+}
+
+async function validateIP() {
+  const ip = document.getElementById('validateInput').value.trim();
+  clearAlert('validateAlert');
+  const res = await apiPost('/api/tools/validate_ip', { ip });
+  if (!res.success) return;
+
+  const d = res.data;
+  const badge = document.getElementById('validBadge');
+  if (d.valid) {
+    badge.innerHTML = `<span style="color:#27ae60;">✅ Valid IPv4 Address</span>`;
+    document.getElementById('ipInfoGrid').innerHTML = `
+      <div class="info-item"><div class="info-label">IP Address</div><div class="info-value highlight">${d.ip}</div></div>
+      <div class="info-item"><div class="info-label">IP Class</div><div class="info-value">${d.class}</div></div>
+      <div class="info-item"><div class="info-label">Type</div><div class="info-value">${d.is_private ? '🔒 Private' : '🌐 Public'}</div></div>
+      <div class="info-item"><div class="info-label">Loopback</div><div class="info-value">${d.is_loopback ? '✅ Yes' : 'No'}</div></div>
+      <div class="info-item"><div class="info-label">Multicast</div><div class="info-value">${d.is_multicast ? '✅ Yes' : 'No'}</div></div>`;
+    // Binary with dots
+    const octets = d.binary.split('.');
+    document.getElementById('ipBin').textContent = octets.join('  .  ');
+  } else {
+    badge.innerHTML = `<span style="color:#ef4444;">❌ Invalid IPv4 Address</span>`;
+    document.getElementById('ipInfoGrid').innerHTML = `<div class="info-item"><div class="info-label">Error</div><div class="info-value" style="color:#ef4444;">Not a valid IPv4 address format</div></div>`;
+    document.getElementById('ipBin').textContent = '—';
+  }
+  document.getElementById('validateResult').classList.remove('hidden');
+}
+
+async function runPlanner() {
+  const base_network = document.getElementById('plannerNet').value.trim();
+  const total_hosts  = document.getElementById('plannerHosts').value;
+  const num_subnets  = document.getElementById('plannerSubnets').value;
+  setLoading('plannerBtn', true);
+
+  try {
+    const res = await apiPost('/api/planner', { base_network, total_hosts, num_subnets });
+    if (!res.success) return;
+
+    const s = res.suggestions;
+    document.getElementById('plannerTable').innerHTML = s.map(opt => `
+      <tr style="${opt.recommended ? 'background:rgba(102,126,234,0.1);' : ''}">
+        <td><strong>/${opt.prefix}</strong></td>
+        <td>${opt.subnet_mask}</td>
+        <td>${fmt(opt.hosts_per_subnet)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="progress-bar-wrap" style="width:60px;"><div class="progress-bar-fill" style="width:${opt.efficiency}%;"></div></div>
+            ${opt.efficiency}%
+          </div>
+        </td>
+        <td>${fmt(opt.wasted_per_subnet)}</td>
+        <td>${opt.recommended ? '<span class="badge badge-success">⭐ Recommended</span>' : '—'}</td>
+      </tr>`).join('');
+
+    const best = s.find(o => o.recommended) || s[0];
+    document.getElementById('plannerRecommendation').innerHTML = `
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px;">💡 Recommended: /${best.prefix} (${best.subnet_mask})</div>
+      <div style="font-size:13px;color:var(--text-secondary);">
+        This provides <strong>${fmt(best.hosts_per_subnet)}</strong> usable hosts per subnet with <strong>${best.efficiency}%</strong> efficiency.
+        ${best.efficiency >= 80 ? 'Excellent IP utilization.' : best.efficiency >= 50 ? 'Good balance between capacity and efficiency.' : 'Consider a smaller subnet for less wastage.'}
+      </div>`;
+
+    document.getElementById('plannerResult').classList.remove('hidden');
+  } finally {
+    setLoading('plannerBtn', false);
+  }
+}
+</script>
+{% endblock %}

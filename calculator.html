@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}Subnet Calculator{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">🧮 Subnet Calculator</div>
+  <div class="page-subtitle">Complete subnet analysis from any IP address and CIDR prefix</div>
+</div>
+
+<div class="grid-2">
+  <!-- Input Card -->
+  <div class="glass-card">
+    <div class="section-title">🔍 Input</div>
+
+    <div class="form-group">
+      <label class="form-label">IP Address</label>
+      <input type="text" class="form-input" id="ipInput" placeholder="e.g. 192.168.10.0" value="192.168.10.0"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">CIDR Prefix Length</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <input type="range" id="cidrSlider" min="1" max="32" value="24"
+               style="flex:1;accent-color:#667eea;" oninput="document.getElementById('cidrVal').textContent=this.value"/>
+        <span id="cidrVal" style="font-weight:700;font-size:18px;color:#667eea;min-width:36px;">24</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:4px;">
+        <span>/1</span><span>/8</span><span>/16</span><span>/24</span><span>/32</span>
+      </div>
+    </div>
+
+    <div id="calcAlert" class="hidden"></div>
+
+    <button class="btn btn-primary btn-full" id="calcBtn" onclick="runCalculator()">
+      🧮 Calculate Subnet
+    </button>
+
+    <!-- Presets -->
+    <div style="margin-top:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;">QUICK PRESETS</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadPreset('10.0.0.0','8')">/8 Class A</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPreset('172.16.0.0','16')">/16 Class B</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPreset('192.168.1.0','24')">/24 Class C</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPreset('192.168.1.0','28')">/28 Small</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPreset('10.10.0.0','30')">/30 Point-to-Point</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Card -->
+  <div class="glass-card" id="summaryCard" style="display:flex;flex-direction:column;gap:8px;">
+    <div class="section-title">📋 Summary</div>
+    <div id="summaryContent" style="display:flex;align-items:center;justify-content:center;flex:1;color:var(--text-secondary);font-size:14px;">
+      Enter an IP address and calculate to see results
+    </div>
+  </div>
+</div>
+
+<!-- Detailed Results -->
+<div id="resultSection" class="hidden mt-24">
+
+  <!-- Stat cards -->
+  <div class="stat-grid" id="statCards"></div>
+
+  <!-- Info grid -->
+  <div class="glass-card">
+    <div class="section-title">📊 Full Details</div>
+    <div class="info-grid" id="infoGrid"></div>
+  </div>
+
+  <!-- Binary Representation -->
+  <div class="glass-card mt-24">
+    <div class="section-title">💻 Binary Representation</div>
+    <div class="bit-legend">
+      <div class="legend-item"><div class="legend-dot legend-dot-network"></div> Network Bits</div>
+      <div class="legend-item"><div class="legend-dot legend-dot-host"></div> Host Bits</div>
+    </div>
+
+    <div style="margin:16px 0;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">IP ADDRESS</div>
+      <div id="ipBinaryDisplay"></div>
+    </div>
+    <div style="margin:16px 0;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">SUBNET MASK</div>
+      <div id="maskBinaryDisplay"></div>
+    </div>
+    <div style="margin:16px 0;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">NETWORK ADDRESS (ANDed)</div>
+      <div id="netBinaryDisplay"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid-2 mt-24">
+    <div class="glass-card">
+      <div class="section-title">📈 Host Distribution</div>
+      <div class="chart-container">
+        <canvas id="hostChart"></canvas>
+      </div>
+    </div>
+    <div class="glass-card">
+      <div class="section-title">⚡ Efficiency Meter</div>
+      <div id="efficiencyDisplay" style="padding:16px 0;"></div>
+    </div>
+  </div>
+
+  <!-- Export -->
+  <div class="export-bar">
+    <button class="btn btn-success" onclick="doExport('csv')">📥 Export CSV</button>
+    <button class="btn btn-ghost" onclick="doExport('txt')">📄 Export TXT</button>
+    <a href="/simulation" class="btn btn-accent" id="simLink">🎬 Run Simulation</a>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let hostChart = null;
+let lastData  = null;
+
+function loadPreset(ip, cidr) {
+  document.getElementById('ipInput').value = ip;
+  document.getElementById('cidrSlider').value = cidr;
+  document.getElementById('cidrVal').textContent = cidr;
+  runCalculator();
+}
+
+async function runCalculator() {
+  const ip   = document.getElementById('ipInput').value.trim();
+  const cidr = document.getElementById('cidrSlider').value;
+  clearAlert('calcAlert');
+  setLoading('calcBtn', true);
+
+  try {
+    const res = await apiPost('/api/calculate', { ip, cidr });
+    if (!res.success) { showAlert('calcAlert', res.error); return; }
+    lastData = res.data;
+    renderResults(res.data);
+  } catch(e) {
+    showAlert('calcAlert', 'Could not connect to server.');
+  } finally {
+    setLoading('calcBtn', false);
+  }
+}
+
+function renderResults(d) {
+  // Summary card
+  document.getElementById('summaryContent').innerHTML = `
+    <div style="text-align:center;">
+      <div style="font-size:36px;font-weight:800;background:var(--grad-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${d.network}/${d.cidr}</div>
+      <div style="font-size:14px;color:var(--text-secondary);margin-top:8px;">
+        Class ${d.ip_class} &nbsp;•&nbsp; ${d.is_private ? '🔒 Private' : '🌐 Public'} &nbsp;•&nbsp; ${fmt(d.usable_hosts)} usable hosts
+      </div>
+    </div>`;
+
+  // Stat cards
+  document.getElementById('statCards').innerHTML = `
+    <div class="stat-card stat-card-1"><div class="stat-label">Network Address</div><div class="stat-value" style="font-size:17px;">${d.network}</div><div class="stat-icon">🌐</div></div>
+    <div class="stat-card stat-card-2"><div class="stat-label">Broadcast</div><div class="stat-value" style="font-size:17px;">${d.broadcast}</div><div class="stat-icon">📡</div></div>
+    <div class="stat-card stat-card-3"><div class="stat-label">Usable Hosts</div><div class="stat-value">${fmt(d.usable_hosts)}</div><div class="stat-icon">💻</div></div>
+    <div class="stat-card stat-card-4"><div class="stat-label">Total IPs</div><div class="stat-value">${fmt(d.total_hosts)}</div><div class="stat-icon">🔢</div></div>`;
+
+  // Info grid
+  const fields = [
+    ['Network Address', d.network],
+    ['Subnet Mask', d.subnet_mask],
+    ['CIDR Notation', `/${d.cidr}`],
+    ['Wildcard Mask', d.wildcard_mask],
+    ['Broadcast Address', d.broadcast],
+    ['First Usable IP', d.first_usable],
+    ['Last Usable IP', d.last_usable],
+    ['IP Class', d.ip_class],
+    ['Total Hosts', fmt(d.total_hosts)],
+    ['Usable Hosts', fmt(d.usable_hosts)],
+    ['Network Type', d.is_private ? 'Private' : 'Public'],
+  ];
+  document.getElementById('infoGrid').innerHTML = fields.map(([label, val]) => `
+    <div class="info-item">
+      <div class="info-label">${label}</div>
+      <div class="info-value">${val}</div>
+    </div>`).join('');
+
+  // Binary displays
+  renderBinaryBits(d.binary_network.replace(/\./g,''), d.cidr, 'ipBinaryDisplay');
+  renderBinaryBits(d.binary_mask.replace(/\./g,''), d.cidr, 'maskBinaryDisplay');
+  // For network address binary, recompute:
+  renderBinaryBits(d.binary_network.replace(/\./g,''), d.cidr, 'netBinaryDisplay');
+
+  // Chart
+  renderHostChart(d);
+
+  // Efficiency
+  const eff = d.total_hosts > 0 ? ((d.usable_hosts / d.total_hosts) * 100).toFixed(1) : 0;
+  document.getElementById('efficiencyDisplay').innerHTML = `
+    <div style="margin-bottom:24px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px;">
+        <span>IP Efficiency</span><span>${eff}%</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${eff}%;background:var(--grad-success);"></div></div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px;">
+        <span>Wasted IPs</span><span>${fmt(d.total_hosts - d.usable_hosts)} reserved</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${100-eff}%;background:var(--grad-secondary);"></div></div>
+    </div>
+    <div class="info-item" style="margin-top:20px;">
+      <div class="info-label">Recommendation</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">
+        ${d.cidr <= 24 ? '✅ Good choice for typical LAN segments.' :
+          d.cidr === 30 ? '✅ Ideal for point-to-point WAN links.' :
+          d.cidr >= 29 ? '⚡ Small subnet — efficient for minimal hosts.' : '✅ Suitable for your use case.'}
+      </div>
+    </div>`;
+
+  // Sim link
+  document.getElementById('simLink').href = `/simulation?ip=${d.network}&cidr=${d.cidr}`;
+
+  document.getElementById('resultSection').classList.remove('hidden');
+}
+
+function renderHostChart(d) {
+  const canvas = document.getElementById('hostChart');
+  if (hostChart) hostChart.destroy();
+  hostChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: ['Total IPs', 'Usable Hosts', 'Reserved'],
+      datasets: [{
+        label: 'Count',
+        data: [d.total_hosts, d.usable_hosts, d.total_hosts - d.usable_hosts],
+        backgroundColor: ['rgba(102,126,234,0.8)','rgba(67,233,123,0.8)','rgba(240,147,251,0.8)'],
+        borderColor: ['#667eea','#43e97b','#f093fb'],
+        borderWidth: 2,
+        borderRadius: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#888', font: { family:'Poppins' } } },
+        x: { grid: { display: false }, ticks: { color: '#888', font: { family:'Poppins' } } }
+      }
+    }
+  });
+}
+
+function doExport(fmt) {
+  if (!lastData) return;
+  const rows = [lastData];
+  exportData(rows, fmt, 'subnet_calculator');
+}
+</script>
+{% endblock %}

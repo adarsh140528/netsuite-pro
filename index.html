@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-title">📊 Network Dashboard</div>
+  <div class="page-subtitle">Professional subnetting, planning, and network analysis</div>
+</div>
+
+<!-- Quick Action Cards -->
+<div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+  <a href="/calculator" style="text-decoration:none;">
+    <div class="stat-card stat-card-1" style="cursor:pointer;">
+      <div class="stat-label">Subnet Calculator</div>
+      <div class="stat-value" style="font-size:16px;">IP + CIDR → Details</div>
+      <div class="stat-icon">🧮</div>
+    </div>
+  </a>
+  <a href="/generator" style="text-decoration:none;">
+    <div class="stat-card stat-card-2" style="cursor:pointer;">
+      <div class="stat-label">Subnet Generator</div>
+      <div class="stat-value" style="font-size:16px;">Split Networks</div>
+      <div class="stat-icon">⚡</div>
+    </div>
+  </a>
+  <a href="/vlsm" style="text-decoration:none;">
+    <div class="stat-card stat-card-3" style="cursor:pointer;">
+      <div class="stat-label">VLSM Planner</div>
+      <div class="stat-value" style="font-size:16px;">Variable Length</div>
+      <div class="stat-icon">🏗️</div>
+    </div>
+  </a>
+  <a href="/simulation" style="text-decoration:none;">
+    <div class="stat-card stat-card-4" style="cursor:pointer;">
+      <div class="stat-label">Step Simulation</div>
+      <div class="stat-value" style="font-size:16px;">Visual Learning</div>
+      <div class="stat-icon">🎬</div>
+    </div>
+  </a>
+  <a href="/tools" style="text-decoration:none;">
+    <div class="stat-card stat-card-5" style="cursor:pointer;">
+      <div class="stat-label">Network Tools</div>
+      <div class="stat-value" style="font-size:16px;">CIDR & IP Utils</div>
+      <div class="stat-icon">🔧</div>
+    </div>
+  </a>
+</div>
+
+<!-- Quick Calculator + Chart -->
+<div class="grid-2">
+  <div class="glass-card">
+    <div class="section-title">⚡ Quick Calculator</div>
+    <div class="form-group">
+      <label class="form-label">IP Address / Network</label>
+      <div class="form-input-group">
+        <input type="text" class="form-input" id="quickIP" placeholder="192.168.1.0" value="192.168.1.0"/>
+        <input type="text" class="form-input" id="quickCIDR" placeholder="24" value="24" style="flex:0.4;"/>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" id="quickCalcBtn" onclick="quickCalc()">
+      🔍 Calculate
+    </button>
+
+    <div id="quickAlert" class="hidden mt-16"></div>
+
+    <div id="quickResult" class="hidden mt-16">
+      <div class="info-grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="info-item">
+          <div class="info-label">Network Address</div>
+          <div class="info-value highlight" id="q-network">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Broadcast</div>
+          <div class="info-value" id="q-broadcast">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">First Host</div>
+          <div class="info-value" id="q-first">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Last Host</div>
+          <div class="info-value" id="q-last">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Subnet Mask</div>
+          <div class="info-value" id="q-mask">—</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Usable Hosts</div>
+          <div class="info-value highlight" id="q-hosts">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card">
+    <div class="section-title">📈 IP Distribution</div>
+    <div class="chart-container">
+      <canvas id="dashChart"></canvas>
+    </div>
+    <div id="chartPlaceholder" style="display:flex;align-items:center;justify-content:center;height:220px;color:var(--text-secondary);font-size:13px;">
+      Calculate a subnet to see the chart →
+    </div>
+  </div>
+</div>
+
+<!-- Feature Overview -->
+<div class="glass-card mt-24">
+  <div class="section-title">🚀 Features</div>
+  <div class="grid-3 gap-16">
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">🧮</div>
+      <div style="font-weight:700;margin-bottom:6px;">Subnet Calculator</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Full subnet breakdown from any IP/CIDR — network ID, broadcast, host range, masks & more.</div>
+    </div>
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">⚡</div>
+      <div style="font-weight:700;margin-bottom:6px;">Subnet Generator</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Auto-split a network by count or by hosts per subnet with full range details for each.</div>
+    </div>
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">🏗️</div>
+      <div style="font-weight:700;margin-bottom:6px;">VLSM Planner</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Allocate variable-length subnets optimally across departments with efficiency analysis.</div>
+    </div>
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">🎬</div>
+      <div style="font-weight:700;margin-bottom:6px;">Step Simulation</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Interactive step-by-step binary visualization with highlighted network & host bits.</div>
+    </div>
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">📊</div>
+      <div style="font-weight:700;margin-bottom:6px;">Visual Analytics</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Chart.js graphs for IP usage, efficiency, wastage and subnet distribution.</div>
+    </div>
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">💾</div>
+      <div style="font-weight:700;margin-bottom:6px;">Export Results</div>
+      <div style="font-size:13px;color:var(--text-secondary);">Download any calculation as a CSV or plain-text file for offline use.</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let dashChart = null;
+
+async function quickCalc() {
+  const ip   = document.getElementById('quickIP').value.trim();
+  const cidr = document.getElementById('quickCIDR').value.trim();
+  clearAlert('quickAlert');
+  setLoading('quickCalcBtn', true);
+
+  try {
+    const res = await apiPost('/api/calculate', { ip, cidr });
+    if (!res.success) { showAlert('quickAlert', res.error); return; }
+    const d = res.data;
+    document.getElementById('q-network').textContent   = `${d.network}/${d.cidr}`;
+    document.getElementById('q-broadcast').textContent = d.broadcast;
+    document.getElementById('q-first').textContent     = d.first_usable;
+    document.getElementById('q-last').textContent      = d.last_usable;
+    document.getElementById('q-mask').textContent      = d.subnet_mask;
+    document.getElementById('q-hosts').textContent     = fmt(d.usable_hosts);
+    document.getElementById('quickResult').classList.remove('hidden');
+    renderDashChart(d);
+  } catch(e) {
+    showAlert('quickAlert', 'Network error. Is Flask running?');
+  } finally {
+    setLoading('quickCalcBtn', false);
+  }
+}
+
+function renderDashChart(d) {
+  const placeholder = document.getElementById('chartPlaceholder');
+  const canvas = document.getElementById('dashChart');
+  placeholder.style.display = 'none';
+  canvas.style.display = 'block';
+
+  const usable  = d.usable_hosts;
+  const wasted  = d.total_hosts - d.usable_hosts;
+
+  if (dashChart) dashChart.destroy();
+  dashChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['Usable Hosts', 'Network/Broadcast (Reserved)'],
+      datasets: [{
+        data: [usable, Math.max(wasted, 2)],
+        backgroundColor: [
+          'rgba(102,126,234,0.85)',
+          'rgba(240,147,251,0.85)'
+        ],
+        borderColor: ['#667eea','#f093fb'],
+        borderWidth: 2,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 16, font: { family: 'Poppins', size: 12 }, color: '#888' } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()}`
+          }
+        }
+      },
+      animation: { animateRotate: true, duration: 800 }
+    }
+  });
+}
+
+// Auto-calc on load
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('dashChart').style.display = 'none';
+  quickCalc();
+});
+</script>
+{% endblock %}
